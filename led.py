@@ -5,6 +5,8 @@ from time import sleep
 import socket
 import os
 
+
+
 #Beallitasok
 GPIO.setmode(GPIO.BCM)
 GPIO.setwarnings(False)
@@ -15,19 +17,20 @@ pwm.start(0)
 print('sikeres volt a setup, kezdodik a rezgetes!')
 
 class Rezgeto():
-    def __init__(self, t=5, f=25, tbe=35):
-        self.t = t
+    def __init__(self, t=5000, f=25, tbe=35):
+        self.t = t/1000
         self.f = f
         self.tbe = tbe
         self.string = ""
+        self.t_stop = 0
     
     def print_params(self):
-        print (f"Aktualis feladat: Rezgetni {self.t} db alkalommal {self.f} 1/s frekvencian {self.tbe}  kitoltesi tenyezovel")
+        print (f"Aktualis feladat: Rezgetni {self.t} sec ideig {self.f} 1/s frekvencian {self.tbe}  kitoltesi tenyezovel")
         
     def set_params_by_string(self, kapott_string):
         try:
             self.t, self.f, self.tbe = kapott_string.split(',')[2:-2]
-            self.t = int(self.t)
+            self.t = int(self.t)/1000
             self.f = int(self.f)
             self.tbe = int(self.tbe)
         except:
@@ -37,9 +40,13 @@ class Rezgeto():
         self.print_params()
     
     def blink(self):
+        t = time.time()
+        self.t_stop = t + self.t
+        print(f"{t} kezdő idő\n" )
+        print(f"{self.t_stop} rezgés vége")
         pwm.start(self.tbe)
-        for i in range(int(self.t)):
-            print(f"Rezgek {i}")
+        while time.time() < self.t_stop:
+            sleep(0.1)
         pwm.stop()
         
 #Halozat kiepitese      
@@ -49,8 +56,8 @@ s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 #s.bind(("169.254.229.228", 8991))
 ipv4 = os.popen('ip addr show wlan0 | grep "\<inet\>" | awk \'{ print $2 }\' | awk -F "/" \'{ print $1 }\'').read().strip()
 #s.bind(("192.168.1.161", 8991))
-s.bind((ipv4, 8991))
-s.listen(5)
+s.bind((ipv4, 8998))
+s.listen(20)
 print(f"Socket letrejott, hallgatozik a {ipv4} cimen!")
 rezegj = Rezgeto()
 clientsocket, address = s.accept()
