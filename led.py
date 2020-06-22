@@ -73,6 +73,7 @@ class Rezgeto():
         pwm.ChangeDutyCycle(int(self.dutyred))
         pwm.ChangeFrequency(int(self.fred))
         pwm.start(self.dutyred)
+        self.red_is_on = True
     
     #Indulj újra
     def poweroff(self):
