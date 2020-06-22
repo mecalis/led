@@ -4,6 +4,7 @@ import time
 from time import sleep
 import socket
 import os
+from subprocess import call
 
 
 
@@ -20,11 +21,16 @@ class Rezgeto():
     def __init__(self, t=5000, f=25, tbe=35):
         self.t = t/1000
         self.f = f
+        self.fred = 100
+        self.dutyred = 60
         self.tbe = tbe
-        self.tred = 60
+        self.tred = 600
         self.string = ""
         self.t_stop = 0
+        
         self.vibe_is_on = False
+        self.red_is_on = False
+        self.debugmode = True
         
         self.regex_codes = []
         self.regex_codes.append("^E,[1-5],[0-9]*,[0-9]*,[0-9]*,[0-9]*,V$")
@@ -51,23 +57,33 @@ class Rezgeto():
     
     #Rezgetés indul
     def vibe_start(self):
+        self.debug("vibe_start")
         t = time.time()
         self.t_stop = t + self.t
+        self.tred_stop = self.t_stop + self.tred
         print(f"{t} kezdő idő\n" )
         print(f"{self.t_stop} rezgés vége")
+        print(f"{self.tred_stop} csillapítás vége")
         self.vibe_is_on = True
         pwm.start(self.tbe)
         
     def vibe_stop(self):
+        self.debug("vibe_stop")
         print("Rezgetés állj! csillapíts!")
+        pwm.ChangeDutyCycle(int(self.dutyred))
+        pwm.ChangeFrequency(int(self.fred))
+        pwm.start(self.dutyred)
     
     #Indulj újra
     def poweroff(self):
-        from subprocess import call
         call("sudo nohup shutdown -h now", shell=True)
+        
+    def reboot(self):
+        call("sudo shutdown -r now")
     
     #Üzenetek ellenőrzése és kódolása
     def msg_divider(self, msg):
+        self.debug("msg_divider")
         for code in codes:
             p = re.compile(code[0])
             talalat = p.findall(msg)
@@ -75,6 +91,7 @@ class Rezgeto():
                 return code[1]
     #IP változtató script
     def ip_change(self, msg):
+        self.debug("ip_change")
         new_ip = msg.split(',')[1]
         print("IP változtatás!")
         try:
@@ -87,9 +104,12 @@ class Rezgeto():
     
     #Világítás ki/be
     def light_onoff(self, msg):
+        self.debug("light_onoff")
         print("Fény ki/be")
         
-        
+    def debug(self, mode):
+        if self.debugmode == True:
+            print(mode)
         
 #Halozat kiepitese      
 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -100,14 +120,14 @@ se.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
 #s.bind(("169.254.229.228", 8991))
 sleep(2)
 ipv4 = os.popen('ip addr show wlan0 | grep "\<inet\>" | awk \'{ print $2 }\' | awk -F "/" \'{ print $1 }\'').read().strip()
-ipve4 = os.popen('ip addr show eth0 | grep "\<inet\>" | awk \'{ print $2 }\' | awk -F "/" \'{ print $1 }\'').read().strip()
+#ipve4 = os.popen('ip addr show eth0 | grep "\<inet\>" | awk \'{ print $2 }\' | awk -F "/" \'{ print $1 }\'').read().strip()
 #s.bind(("192.168.1.161", 8991))
 s.bind((ipv4, 8998))
 s.listen(20)
-se.bind((ipve4, 8998))
-se.listen(20)
+#se.bind((ipve4, 8998))
+#se.listen(20)
 print(f"Socket letrejott, hallgatozik a {ipv4} WLAN cimen!")
-print(f"Socket letrejott, hallgatozik a {ipve4} Ethernet cimen!")
+#print(f"Socket letrejott, hallgatozik a {ipve4} Ethernet cimen!")
 rezegj = Rezgeto()
 
 clientsocket, address = s.accept()
@@ -145,10 +165,21 @@ while True:
             pwm.stop()
             msg = False
             rezegj.vibe_is_on = False
+            rezegj.vibe_stop()
+    
+    #Csillapítás leállítása időre
+    if rezegj.red_is_on == True:
+        if time.time() > rezegj.tred_stop:
+            pwm.stop()
+            msg = False
+            rezegj.red_is_on = False
             
     # PI kikapcsolás        
     if msg == "E,poweroff,V":
         rezegj.poweroff()
+        
+    if msg == "E,reboot,V":
+        rezegj.reboot()
         
 pwm.stop()
 
