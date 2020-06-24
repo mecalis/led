@@ -5,6 +5,7 @@ from time import sleep
 import socket
 import os
 from subprocess import call
+import re
 
 
 
@@ -18,12 +19,12 @@ pwm.start(0)
 print('sikeres volt a setup, kezdodik a rezgetes!')
 
 class Rezgeto():
-    def __init__(self, t=5000, f=25, tbe=35):
-        self.t = t/1000
-        self.f = f
+    def __init__(self):
+        self.t = 0
+        self.f = 0
         self.fred = 100
         self.dutyred = 60
-        self.tbe = tbe
+        self.tbe = 0
         self.tred = 600
         self.string = ""
         self.t_stop = 0
@@ -40,7 +41,7 @@ class Rezgeto():
         self.codes = list(zip(self.regex_codes, self.regex_out))
     
     def print_params(self):
-        print (f"Aktualis feladat: Rezgetni {self.t} sec ideig {self.f} 1/s frekvencian {self.tbe}  kitoltesi tenyezovel")
+        print (f"Aktualis feladat: Rezgetni {self.t} sec ideig, {self.f} 1/s frekvencian, {self.tbe} kitoltesi tenyezovel, {self.tred}s csillapítási idővel. ")
         
     def set_params_by_string(self, kapott_string):
         try:
@@ -48,11 +49,11 @@ class Rezgeto():
             self.t = int(self.t)/1000
             self.f = int(self.f)
             self.tbe = int(self.tbe)
-            self.tred = int(self.tred)
+            self.tred = int(self.tred)/1000
         except:
             pass
         pwm.ChangeDutyCycle(int(self.tbe))
-        pwm.ChangeFrequency(int(self.f))
+        #pwm.ChangeFrequency(int(self.f))
         self.print_params()
     
     #Rezgetés indul
@@ -66,6 +67,8 @@ class Rezgeto():
         print(f"{self.tred_stop} csillapítás vége")
         self.vibe_is_on = True
         pwm.start(self.tbe)
+        self.debug("vibe_start vége ")
+        print(self.vibe_is_on)
         
     def vibe_stop(self):
         self.debug("vibe_stop")
@@ -74,6 +77,7 @@ class Rezgeto():
         pwm.ChangeFrequency(int(self.fred))
         pwm.start(self.dutyred)
         self.red_is_on = True
+        self.debug("vibe_stop vége")
     
     #Indulj újra
     def poweroff(self):
@@ -85,7 +89,7 @@ class Rezgeto():
     #Üzenetek ellenőrzése és kódolása
     def msg_divider(self, msg):
         self.debug("msg_divider")
-        for code in codes:
+        for code in self.codes:
             p = re.compile(code[0])
             talalat = p.findall(msg)
             if talalat:
@@ -112,76 +116,93 @@ class Rezgeto():
         if self.debugmode == True:
             print(mode)
         
-#Halozat kiepitese      
-s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-se = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-#s.bind((socket.gethostname(), 8991))
-s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-se.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-#s.bind(("169.254.229.228", 8991))
+#Halozat kiepitese
+WLAN = True
 sleep(2)
-ipv4 = os.popen('ip addr show wlan0 | grep "\<inet\>" | awk \'{ print $2 }\' | awk -F "/" \'{ print $1 }\'').read().strip()
-#ipve4 = os.popen('ip addr show eth0 | grep "\<inet\>" | awk \'{ print $2 }\' | awk -F "/" \'{ print $1 }\'').read().strip()
-#s.bind(("192.168.1.161", 8991))
-s.bind((ipv4, 8998))
-s.listen(20)
-#se.bind((ipve4, 8998))
-#se.listen(20)
-print(f"Socket letrejott, hallgatozik a {ipv4} WLAN cimen!")
-#print(f"Socket letrejott, hallgatozik a {ipve4} Ethernet cimen!")
+if WLAN == False:
+    se = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    se.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    ipve4 = "192.168.1.150"
+    ipve4 = "0.0.0.0"
+    se.bind((ipve4, 8998))
+    se.listen(20)
+    print(f"Socket letrejott, hallgatozik a {ipve4} Ethernet cimen!")
+    clientsockete, addresse = se.accept()
+    print(f"Connection from {address} has been established.")
+    
+else:
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    ipv4 = os.popen('ip addr show wlan0 | grep "\<inet\>" | awk \'{ print $2 }\' | awk -F "/" \'{ print $1 }\'').read().strip()
+    s.bind((ipv4, 8998))
+    s.listen(20)
+    print(f"Socket letrejott, hallgatozik a {ipv4} WLAN cimen!")
+    clientsocket, address = s.accept()
+    print(f"Connection from {address} has been established.")
+
 rezegj = Rezgeto()
 
-clientsocket, address = s.accept()
-print(f"Connection from {address} has been established.")
-
 while True:
+    print("main ciklus eleje")
     msg = clientsocket.recv(1024).decode("utf-8")
-    msg_id = rezegj.msg_divider(msg)
-    if msg_id == 'vibe':
-        #print(msg.decode("utf-8"))
-        print(f"Kapott anyag {msg}")
-        rezegj.set_params_by_string(msg)
-        rezegj.vibe_start()
+    print("main ciklus eleje msg")
+    if msg:
+        print("if message")
+        msg_id = rezegj.msg_divider(msg)
+        
+        if msg_id == 'vibe':
+            #print(msg.decode("utf-8"))
+            print(f"Kapott anyag {msg}")
+            rezegj.set_params_by_string(msg)
+            rezegj.vibe_start()
+            end_message_1100 = bytes('1100', "utf-8")
+            try:
+                clientsocket.sendto(end_message_1100, address)
+                print("Az 1100-as uzenet visszament a kliensnek!")
+            except:
+                print("Az 1100-as uzenetet nem tudta visszakuldeni a kliensnek!")
+            msg = False
+            print("msg id msg törlés")
         msg = False
-        end_message_1100 = bytes('1100', "utf-8")
-        try:
-            clientsocket.sendto(end_message_1100, address)
-            print("Az 1100-as uzenet visszament a kliensnek!")
-        except:
-            print("Az 1100-as uzenetet nem tudta visszakuldeni a kliensnek!")
+        print("msg msg törlés")
+        #IP átírás
+        if msg_id == 'ip':
+            rezegj.ip_change(msg)
+            msg = False
             
-    #IP átírás
-    if msg_id == 'ip':
-        rezegj.ip_change(msg)
-        msg = False
-        
-    #Fény ki/be    
-    if msg_id == 'light':
-        rezegj.light_onoff(msg)
-        msg = False
-        
+        #Fény ki/be    
+        if msg_id == 'light':
+            rezegj.light_onoff(msg)
+            msg = False
+            
     #Rezgés leállítása időre   
     if rezegj.vibe_is_on == True:
+        print("if vibe is on")
+        print(time.time())
+        print(rezegj.t_stop)
         if time.time() > rezegj.t_stop:
+            print("time.time >")
             pwm.stop()
             msg = False
             rezegj.vibe_is_on = False
             rezegj.vibe_stop()
-    
+        
     #Csillapítás leállítása időre
     if rezegj.red_is_on == True:
         if time.time() > rezegj.tred_stop:
             pwm.stop()
             msg = False
             rezegj.red_is_on = False
-            
+                
     # PI kikapcsolás        
     if msg == "E,poweroff,V":
         rezegj.poweroff()
         
     if msg == "E,reboot,V":
         rezegj.reboot()
-        
+    print("main ciklus vége")    
+
+print("whileban már nem")
 pwm.stop()
 
 GPIO.cleanup()
