@@ -71,12 +71,12 @@ def mainloop(q,clientsocket,rezegj):
         if q.empty() == True:
             pass
         else:
-            msg = q.get()
-            print (msg, "main loop")
-            code = rezegj.msg_divider(msg)
+            qmsg = q.get()
+            print (qmsg, "main loop")
+            code = rezegj.msg_divider(qmsg)
             print(f"Aktuális kód: {code}")
             if code == "vibe":
-                rezegj.set_params_by_string(msg)
+                rezegj.set_params_by_string(qmsg)
                 rezegj.vibe_start()
                 
     
