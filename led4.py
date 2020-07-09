@@ -58,7 +58,7 @@ def get_message(q,clientsocket,rezegj):
         msg = clientsocket.recv(1024).decode("utf-8")
         #print("msg ciklus eleje msg")
         if msg:
-            print("if message ", msg, " ", datetime.datetime.now())
+            print("##########\nÜzenet érkezett:", msg, " ", datetime.datetime.now())
             if msg == "1000":
                 pass #Feladat: Pong visszaüzenetet küldeni
             ##################################
@@ -72,7 +72,7 @@ def mainloop(q,clientsocket,rezegj):
             pass
         else:
             qmsg = q.get()
-            print (qmsg, "main loop")
+            #print (qmsg, "main loop")
             code = rezegj.msg_divider(qmsg)
             print(f"Aktuális kód: {code}")
             if code == "vibe":
@@ -104,6 +104,6 @@ t1.start()
 t2.start() 
 
 s.close()
-pwm.stop()
+#pwm.stop()
 
-GPIO.cleanup()
+#GPIO.cleanup()

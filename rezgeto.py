@@ -28,23 +28,30 @@ class Rezgeto():
         print("Rezgető modul betöltve")
     
     def print_params(self):
-        print (f"Aktualis feladat: Rezgetni {self.t} sec ideig, {self.f} 1/s frekvencian, {self.tbe} kitoltesi tenyezovel, {self.tred}s csillapítási idővel. ")
+        print (f"Aktualis feladat: Rezgetni {self.t} sec ideig,\n{self.f} 1/s frekvencián,\n{self.tbe} kitoltesi tenyezovel,\n{self.tred}s csillapítási idővel.\nÜzemmód: {self.mode} ")
         
     def set_params_by_string(self, kapott_string):
         try:
             self.mode, self.t, self.f, self.tbe, self.tred = kapott_string.split(',')[1:-1]
+            self.mode = int(self.mode)
             self.t = int(self.t)/1000
             self.f = int(self.f)
             self.tbe = int(self.tbe)
             self.tred = int(self.tred)/1000
             self.pwm_to_vibe = []
+            #print(self.pwm_to_vibe)
+            #print(f"lista hossza nullázás után {len(self.pwm_to_vibe)}")
             if self.mode == 1:
                 self.pwm_to_vibe = self.pwm_list
-                print("Beállítva mind!")
+                print("Beállítva minden tekercs rezgetésre!")
+                #print(self.pwm_to_vibe)
+                #print(f"lista hossza beállítás után {len(self.pwm_to_vibe)}")
             if self.mode == 2:
                 self.pwm_to_vibe.append(self.pwm_list[2])
                 self.pwm_to_vibe.append(self.pwm_list[3])
                 print("Beállítva a jobb oldal")
+                #print(self.pwm_to_vibe)
+                #print(f"lista hossza beállítás után {len(self.pwm_to_vibe)}")
             if self.mode == 3:
                 self.pwm_to_vibe.append(self.pwm_list[0])
                 self.pwm_to_vibe.append(self.pwm_list[1])
@@ -63,11 +70,11 @@ class Rezgeto():
         
         self.print_params()
     
-    def set_pwm(self, pwm_list, mode):
+    def set_pwm(self, pwm_list, mode, frek, duty):
         if mode == 'start':
             for pwm in pwm_list:
-                pwm.ChangeFrequency(int(self.f))
-                pwm.start(int(self.tbe))
+                pwm.ChangeFrequency(int(frek))
+                pwm.start(int(duty))
             print("Kimenetek beállítva: START")
         if mode == 'stop':
             for pwm in pwm_list:
@@ -76,17 +83,20 @@ class Rezgeto():
 
     #Rezgetés indul
     def vibe_start(self):
-        self.debug("vibe_start")
+        #self.debug("vibe_start")
         t = time.time()
         self.t_stop = t + self.t
         self.tred_stop = self.t_stop + self.tred
         print(f"{t} kezdő idő" )
         print(f"{self.t_stop} rezgés vége")
         print(f"{self.tred_stop} csillapítás vége")
-        self.set_pwm(self.pwm_list, 'start')
+        self.set_pwm(self.pwm_to_vibe, 'start', self.f, self.tbe)
         time.sleep(self.t)
-        self.set_pwm(self.pwm_list, 'stop')
-        self.debug("vibe_start vége ")
+        self.set_pwm(self.pwm_to_vibe, 'stop', self.f, self.tbe)
+        self.set_pwm(self.pwm_to_vibe, 'start', self.fred, self.dutyred)
+        time.sleep(self.tred)
+        self.set_pwm(self.pwm_to_vibe, 'stop', self.fred, self.dutyred)
+        #self.debug("vibe_start vége ")
 
     #Indulj újra
     def poweroff(self):
@@ -97,7 +107,7 @@ class Rezgeto():
     
     #Üzenetek ellenőrzése és kódolása
     def msg_divider(self, msg):
-        self.debug("msg_divider")
+        #self.debug("msg_divider")
         for code in self.codes:
             p = re.compile(code[0])
             talalat = p.findall(msg)
