@@ -6,6 +6,7 @@ import socket
 import os
 from subprocess import call
 import re
+import asyncio
 
 
 
@@ -16,7 +17,7 @@ ledpin = 18
 GPIO.setup(ledpin, GPIO.OUT)
 pwm = GPIO.PWM(ledpin, 30)
 pwm.start(0)
-print('sikeres volt a setup, kezdodik a rezgetes!')
+print('sikeres volt a setup, hálózat kiépítés kezdődik (2 sec delay)!')
 
 class Rezgeto():
     def __init__(self):
@@ -73,7 +74,8 @@ class Rezgeto():
     def vibe_stop(self):
         self.debug("vibe_stop")
         print("Rezgetés állj! csillapíts!")
-        pwm.ChangeDutyCycle(int(self.dutyred))
+        pwm.stop()
+        self.vibe_is_on = False
         pwm.ChangeFrequency(int(self.fred))
         pwm.start(self.dutyred)
         self.red_is_on = True
@@ -134,7 +136,7 @@ else:
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     ipv4 = os.popen('ip addr show wlan0 | grep "\<inet\>" | awk \'{ print $2 }\' | awk -F "/" \'{ print $1 }\'').read().strip()
-    s.bind((ipv4, 8998))
+    s.bind((ipv4, 8997))
     s.listen(20)
     print(f"Socket letrejott, hallgatozik a {ipv4} WLAN cimen!")
     clientsocket, address = s.accept()
@@ -142,68 +144,84 @@ else:
 
 rezegj = Rezgeto()
 
-while True:
-    print("main ciklus eleje")
-    msg = clientsocket.recv(1024).decode("utf-8")
-    print("main ciklus eleje msg")
-    if msg:
-        print("if message")
-        msg_id = rezegj.msg_divider(msg)
+
+
+async def wait_msg(clientsocket):
+    while True:
+        print("wait_msg eleje")
+        async def messs():
+            msg_ = clientsocket.recv(1024).decode("utf-8")
+            return msg_
         
-        if msg_id == 'vibe':
-            #print(msg.decode("utf-8"))
-            print(f"Kapott anyag {msg}")
-            rezegj.set_params_by_string(msg)
-            rezegj.vibe_start()
-            end_message_1100 = bytes('1100', "utf-8")
-            try:
-                clientsocket.sendto(end_message_1100, address)
-                print("Az 1100-as uzenet visszament a kliensnek!")
-            except:
-                print("Az 1100-as uzenetet nem tudta visszakuldeni a kliensnek!")
-            msg = False
-            print("msg id msg törlés")
-        msg = False
-        print("msg msg törlés")
-        #IP átírás
-        if msg_id == 'ip':
-            rezegj.ip_change(msg)
-            msg = False
+        msg = await messs() 
+        print("wait_msg vége")
+
+async def mindenmas(clientsocket):
+    while True:
+        wait_msg(clientsocket)
+        print("mindenmas elindult")
+        if msg:
+            print("if message")
+            msg_id = rezegj.msg_divider(msg)
             
-        #Fény ki/be    
-        if msg_id == 'light':
-            rezegj.light_onoff(msg)
-            msg = False
-            
-    #Rezgés leállítása időre   
-    if rezegj.vibe_is_on == True:
-        print("if vibe is on")
-        print(time.time())
-        print(rezegj.t_stop)
-        if time.time() > rezegj.t_stop:
-            print("time.time >")
-            pwm.stop()
-            msg = False
-            rezegj.vibe_is_on = False
-            rezegj.vibe_stop()
-        
-    #Csillapítás leállítása időre
-    if rezegj.red_is_on == True:
-        if time.time() > rezegj.tred_stop:
-            pwm.stop()
-            msg = False
-            rezegj.red_is_on = False
+            if msg_id == 'vibe':
+                #print(msg.decode("utf-8"))
+                print(f"Kapott anyag {msg}")
+                rezegj.set_params_by_string(msg)
+                rezegj.vibe_start()
+                end_message_1100 = bytes('1100', "utf-8")
+                try:
+                    clientsocket.sendto(end_message_1100, address)
+                    print("Az 1100-as uzenet visszament a kliensnek!")
+                except:
+                    print("Az 1100-as uzenetet nem tudta visszakuldeni a kliensnek!")
+                msg = False
+                print("msg id msg törlés")
+
+            #IP átírás
+            if msg_id == 'ip':
+                rezegj.ip_change(msg)
+                msg = False
                 
-    # PI kikapcsolás        
-    if msg == "E,poweroff,V":
-        rezegj.poweroff()
-        
-    if msg == "E,reboot,V":
-        rezegj.reboot()
-    print("main ciklus vége")    
+            #Fény ki/be    
+            if msg_id == 'light':
+                rezegj.light_onoff(msg)
+                msg = False
+                
+        #Rezgés leállítása időre   
+        if rezegj.vibe_is_on == True:
+            print("if vibe is on")
+            print(time.time())
+            print(rezegj.t_stop)
+            if time.time() > rezegj.t_stop:
+                print("time.time >")
+                pwm.stop()
+                msg = False
+                rezegj.vibe_stop()
+            
+        #Csillapítás leállítása időre
+        if rezegj.red_is_on == True:
+            if time.time() > rezegj.tred_stop:
+                pwm.stop()
+                msg = False
+                rezegj.red_is_on = False
+                
+        # PI kikapcsolás        
+        if msg == "E,poweroff,V":
+            rezegj.poweroff()
+            
+        if msg == "E,reboot,V":
+            rezegj.reboot()
+        print("main ciklus vége")
+        await asyncio.sleep(0.1)
+            
 
-print("whileban már nem")
-pwm.stop()
+async def MAIN():
+    await asyncio.gather(mindenmas(clientsocket))
 
-GPIO.cleanup()
+asyncio.run(MAIN())
+
+#pwm.stop()
+
+#GPIO.cleanup()
 
